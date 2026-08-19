@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: cfp-writer
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+cfp:
+  writer:
+    # One document every 2 seconds, cycling over 50 distinct documents.
+    interval-millis: 2000
+    document-count: 50
+    device-id-prefix: device
+    device-count: 5
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    root: INFO
+    com.sanand.cfp: INFO
+    com.azure.cosmos: WARN
+    io.netty: WARN

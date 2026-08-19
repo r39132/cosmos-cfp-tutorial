@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CFP Writer Control Panel</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --fg: #16181d; --muted: #5c6370; --card: #ffffff;
+      --line: #dfe3e8; --accent: #0b6bcb; --ok: #1a7f45; --stop: #b3261e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a; --fg: #e7e9ee; --muted: #9aa2b1; --card: #1c1f26;
+        --line: #2c313b; --accent: #5aa9f7; --ok: #4ac07c; --stop: #f2705f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2rem 1rem; background: var(--bg); color: var(--fg);
+      font: 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    .sub { color: var(--muted); margin: 0 0 1.5rem; font-size: .9rem; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+      padding: 1.25rem; margin-bottom: 1rem;
+    }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; }
+    label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .3rem; }
+    input {
+      width: 9rem; padding: .5rem .6rem; font: inherit; border-radius: 6px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+    }
+    button {
+      padding: .55rem 1.1rem; font: inherit; font-weight: 600; border-radius: 6px;
+      border: 1px solid transparent; cursor: pointer; background: var(--accent); color: #fff;
+    }
+    button.secondary { background: transparent; color: var(--fg); border-color: var(--line); }
+    button.danger { background: var(--stop); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.5rem; margin: 0; }
+    dt { color: var(--muted); font-size: .85rem; }
+    dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .pill { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .8rem; font-weight: 600; }
+    .pill.on { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+    .pill.off { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
+    .err { color: var(--stop); font-size: .85rem; margin-top: .75rem; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>CFP Writer</h1>
+  <p class="sub">Upserts documents into the monitored container so the Change Feed Processor has something to read.</p>
+
+  <div class="card">
+    <dl>
+      <dt>Status</dt><dd><span id="pill" class="pill off">stopped</span></dd>
+      <dt>Upserts</dt><dd id="total">0</dd>
+      <dt>Failures</dt><dd id="failures">0</dd>
+      <dt>Current slot</dt><dd id="slot">0</dd>
+      <dt>Target</dt><dd id="target">&hellip;</dd>
+    </dl>
+    <p id="error" class="err" hidden></p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label for="interval">Write interval (ms)</label>
+        <input id="interval" type="number" min="10" max="600000" step="100">
+      </div>
+      <div>
+        <label for="count">Document count</label>
+        <input id="count" type="number" min="1" max="100000" step="1">
+      </div>
+      <button id="apply" class="secondary">Apply</button>
+    </div>
+    <p class="sub" style="margin:1rem 0 0">
+      The loop cycles through <code>documentCount</code> ids, so after the first pass every write is
+      an update &mdash; which is exactly what incremental change feed surfaces.
+    </p>
+  </div>
+
+  <div class="card row">
+    <button id="start">Start</button>
+    <button id="stop" class="danger">Stop</button>
+    <button id="reset" class="secondary">Reset counters</button>
+  </div>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let dirty = false;
+
+  function render(s) {
+    $('pill').textContent = s.running ? 'running' : 'stopped';
+    $('pill').className = 'pill ' + (s.running ? 'on' : 'off');
+    $('total').textContent = s.totalUpserts;
+    $('failures').textContent = s.failures;
+    $('slot').textContent = s.currentSlot;
+    $('start').disabled = s.running;
+    $('stop').disabled = !s.running;
+    // Don't clobber what the user is mid-way through typing.
+    if (!dirty) {
+      $('interval').value = s.intervalMillis;
+      $('count').value = s.documentCount;
+    }
+    $('error').hidden = !s.lastError;
+    $('error').textContent = s.lastError || '';
+  }
+
+  async function call(path, method) {
+    const res = await fetch(path, { method });
+    if (!res.ok) throw new Error(await res.text());
+    render(await res.json());
+  }
+
+  ['interval', 'count'].forEach((id) => $(id).addEventListener('input', () => { dirty = true; }));
+
+  $('start').onclick = () => call('/api/writer/start', 'POST');
+  $('stop').onclick = () => call('/api/writer/stop', 'POST');
+  $('reset').onclick = () => call('/api/writer/reset', 'POST');
+
+  $('apply').onclick = async () => {
+    const res = await fetch('/api/writer/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        intervalMillis: Number($('interval').value),
+        documentCount: Number($('count').value),
+      }),
+    });
+    dirty = false;
+    if (!res.ok) { $('error').hidden = false; $('error').textContent = 'Invalid settings.'; return; }
+    render(await res.json());
+  };
+
+  async function poll() {
+    try { render(await (await fetch('/api/writer/status')).json()); } catch (e) { /* transient */ }
+  }
+
+  fetch('/api/writer/target').then((r) => r.json()).then((t) => {
+    $('target').textContent = `${t.database}/${t.container} @ ${t.preferredRegion}`;
+  });
+
+  poll();
+  setInterval(poll, 1000);
+</script>
+</body>
+</html>
