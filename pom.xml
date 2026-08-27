@@ -36,7 +36,7 @@
 
     <!-- Test -->
     <junit.version>5.13.4</junit.version>
-    <assertj.version>3.27.6</assertj.version>
+    <assertj.version>3.27.7</assertj.version>
 
     <!-- Plugins -->
     <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
