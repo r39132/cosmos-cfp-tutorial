@@ -18,7 +18,7 @@
   </modules>
 
   <properties>
-    <java.version>17</java.version>
+    <java.version>25</java.version>
     <maven.compiler.release>${java.version}</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -161,7 +161,7 @@
             <configuration>
               <rules>
                 <requireJavaVersion>
-                  <version>[17,18)</version>
+                  <version>[25,26)</version>
                 </requireJavaVersion>
                 <requireMavenVersion>
                   <version>[3.9.0,)</version>
